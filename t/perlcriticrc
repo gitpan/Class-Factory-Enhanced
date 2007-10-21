@@ -1,0 +1,5 @@
+[-BuiltinFunctions::ProhibitStringyEval]
+
+# because Class::Factory does that and I didn't want to change the original
+# code:
+[-Subroutines::ProhibitExplicitReturnUndef]
