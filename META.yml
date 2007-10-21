@@ -2,6 +2,7 @@
 abstract: more functionality for Class::Factory
 author: Marcel GrE<uuml>nauer, C<< <marcel@cpan.org> >>
 build_requires: 
+  Class::Accessor::Complex: 0
   Test::Compile: 0
   Test::More: 0
   UNIVERSAL::require: 0
@@ -19,4 +20,4 @@ no_index:
 requires: 
   Class::Factory: 0
   perl: 5.6.0
-version: 0.01
+version: 0.02

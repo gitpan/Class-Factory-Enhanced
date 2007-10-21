@@ -6,6 +6,7 @@ perl_version '5.006';
 requires 'Class::Factory';
 
 build_requires 'Test::More' => '0.70';
+build_requires 'Class::Accessor::Complex';
 
 use_standard_tests(without => 'pod_coverage');
 auto_include;
