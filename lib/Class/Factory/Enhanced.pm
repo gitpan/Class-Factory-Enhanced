@@ -4,10 +4,10 @@ use warnings;
 use strict;
 
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 
-use base 'Class::Factory::Patched';
+use base 'Class::Factory';
 
 
 # add support for defining several mappings at once
