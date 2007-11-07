@@ -3,7 +3,7 @@ name 'Class-Factory-Enhanced';
 all_from 'lib/Class/Factory/Enhanced.pm';
 perl_version '5.006';
 
-requires 'Class::Factory';
+requires 'Class::Factory' => '1.06';
 
 build_requires 'Test::More' => '0.70';
 build_requires 'Class::Accessor::Complex';

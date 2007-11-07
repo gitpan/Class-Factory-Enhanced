@@ -1,5 +1,8 @@
 Revision history for Perl extension Class::Factory::Enhanced
 
+0.05  Mi Nov  7 14:40:43 CET 2007
+        - Makefile.PL now requires Class::Factory 1.06 or better specifically.
+
 0.04  Mi Nov  7 08:03:33 CET 2007
         - removed Class::Factory::Patched, since Fred Moyers accepted my
           patches to Class::Factory. Class::Factory::Enhanced now subclasses
