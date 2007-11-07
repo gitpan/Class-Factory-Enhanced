@@ -7,10 +7,10 @@ use Carp qw(carp croak cluck);
 use Data::Miscellany 'flatten';
 
 
-our $VERSION = '0.09';
+our $VERSION = '0.11';
 
 
-use base 'Class::Accessor';
+use base qw(Class::Accessor Class::Accessor::Installer);
 
 
 sub mk_new {
@@ -18,10 +18,8 @@ sub mk_new {
     my $class = ref $self || $self;
     @args = ('new') unless @args;
 
-    no strict 'refs';
-
     for my $name (@args) {
-        *{"${class}::${name}"} = sub {
+        $self->install_accessor(name => $name, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${name}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             # don't use $class, as that's already defined above
@@ -34,7 +32,7 @@ sub mk_new {
             $self->$_($args{$_}) for keys %args;
             $self->init(%args) if $self->can('init');
             $self;
-        };
+        });
     }
 
     $self;  # for chaining
@@ -46,12 +44,10 @@ sub mk_singleton {
     my $class = ref $self || $self;
     @args = ('new') unless @args;
 
-    no strict 'refs';
-
     my $singleton;
 
     for my $name (@args) {
-        *{"${class}::${name}"} = sub {
+        $self->install_accessor(name => $name, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${name}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             return $singleton if defined $singleton;
@@ -68,7 +64,7 @@ sub mk_singleton {
             $singleton->$_($args{$_}) for keys %args;
             $singleton->init(%args) if $singleton->can('init');
             $singleton;
-        };
+        });
     }
 
     $self;  # for chaining
@@ -80,21 +76,50 @@ sub mk_scalar_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
-
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             return $_[0]->{$field} if @_ == 1;
             $_[0]->{$field} = $_[1];
-        };
+        });
 
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field} = undef;
+            }
+        );
+    }
+
+    $self;  # for chaining
+}
+
+
+sub mk_class_scalar_accessors {
+    my ($self, @fields) = @_;
+    my $class = ref $self || $self;
+
+    for my $field (@fields) {
+
+        my $scalar;
+
+        $self->install_accessor(name => $field, code => sub {
+            local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field} = undef;
-        };
+            return $scalar if @_ == 1;
+            $scalar = $_[1];
+        });
+
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $scalar = undef;
+            }
+        );
     }
 
     $self;  # for chaining
@@ -115,9 +140,7 @@ sub mk_concat_accessors {
             ($field, $join) = @$arg;
         }
 
-        no strict 'refs';
-
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my ($self, $text) = @_;
@@ -130,14 +153,16 @@ sub mk_concat_accessors {
                 }
             }
             return $self->{$field};
-        };
+        });
 
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field} = undef;
-        };
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field} = undef;
+            }
+        );
 
     }
 
@@ -150,9 +175,7 @@ sub mk_array_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
-
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my ($self, @list) = @_;
@@ -162,93 +185,112 @@ sub mk_array_accessors {
                 if @list;
 
             wantarray ? @{$self->{$field}} : $self->{$field};
-        };
+        });
 
 
-        *{"${class}::push_${field}"} =
-        *{"${class}::${field}_push"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_push"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            push @{$self->{$field}} => @_;
-        };
-
-
-        *{"${class}::pop_${field}"} =
-        *{"${class}::${field}_pop"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_pop"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            pop @{$_[0]->{$field}};
-        };
-
-
-        *{"${class}::unshift_${field}"} =
-        *{"${class}::${field}_unshift"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_unshift"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            unshift @{$self->{$field}} => @_;
-        };
-
-
-        *{"${class}::shift_${field}"} =
-        *{"${class}::${field}_shift"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_shift"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            shift @{$_[0]->{$field}};
-        };
-
-
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field} = [];
-        };
-
-
-        *{"${class}::count_${field}"} =
-        *{"${class}::${field}_count"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_count"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            exists $_[0]->{$field} ? scalar @{$_[0]->{$field}} : 0;
-        };
-
-
-        *{"${class}::splice_${field}"} =
-        *{"${class}::${field}_splice"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_splice"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, $offset, $len, @list) = @_;
-            splice(@{$self->{$field}}, $offset, $len, @list);
-        };
-
-
-        *{"${class}::index_${field}"} =
-        *{"${class}::${field}_index"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_index"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @indices) = @_;
-            my @result = map { $self->{$field}[$_] } @indices;
-            return $result[0] if @indices == 1;
-            wantarray ? @result : \@result;
-        };
-
-
-        *{"${class}::set_${field}"} =
-        *{"${class}::${field}_set"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_set"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-
-            my $self = shift;
-            my @args = @_;
-            croak "${class}::${field}_set expects an even number of fields\n"
-                if @args % 2;
-            while (my ($index, $value) = splice @args, 0, 2) {
-                $self->{$field}->[$index] = $value;
+        $self->install_accessor(
+            name => [ "push_${field}", "${field}_push" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_push"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                push @{$self->{$field}} => @_;
             }
-            return @_ / 2;
-        };
+        );
+
+
+        $self->install_accessor(
+            name => [ "pop_${field}", "${field}_pop" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_pop"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                pop @{$_[0]->{$field}};
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "unshift_${field}", "${field}_unshift" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_unshift"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                unshift @{$self->{$field}} => @_;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "shift_${field}", "${field}_shift" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_shift"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                shift @{$_[0]->{$field}};
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field} = [];
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "count_${field}", "${field}_count" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_count"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                exists $_[0]->{$field} ? scalar @{$_[0]->{$field}} : 0;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "splice_${field}", "${field}_splice" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_splice"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, $offset, $len, @list) = @_;
+                splice(@{$self->{$field}}, $offset, $len, @list);
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "index_${field}", "${field}_index" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_index"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, @indices) = @_;
+                my @result = map { $self->{$field}[$_] } @indices;
+                return $result[0] if @indices == 1;
+                wantarray ? @result : \@result;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "set_${field}", "${field}_set" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_set"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+
+                my $self = shift;
+                my @args = @_;
+                croak
+                    "${class}::${field}_set expects an even number of fields\n"
+                    if @args % 2;
+                while (my ($index, $value) = splice @args, 0, 2) {
+                    $self->{$field}->[$index] = $value;
+                }
+                return @_ / 2;
+            }
+        );
     }
 
     $self;  # for chaining
@@ -260,11 +302,10 @@ sub mk_class_array_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
 
         my @array;
 
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my ($self, @list) = @_;
@@ -273,93 +314,112 @@ sub mk_class_array_accessors {
                 if @list;
 
             wantarray ? @array : \@array
-        };
+        });
 
 
-        *{"${class}::push_${field}"} =
-        *{"${class}::${field}_push"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_push"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            push @array => @_;
-        };
-
-
-        *{"${class}::pop_${field}"} =
-        *{"${class}::${field}_pop"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_pop"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            pop @array;
-        };
-
-
-        *{"${class}::unshift_${field}"} =
-        *{"${class}::${field}_unshift"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_unshift"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            unshift @array => @_;
-        };
-
-
-        *{"${class}::shift_${field}"} =
-        *{"${class}::${field}_shift"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_shift"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            shift @array;
-        };
-
-
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            @array = ();
-        };
-
-
-        *{"${class}::count_${field}"} =
-        *{"${class}::${field}_count"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_count"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            scalar @array;
-        };
-
-
-        *{"${class}::splice_${field}"} =
-        *{"${class}::${field}_splice"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_splice"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, $offset, $len, @list) = @_;
-            splice(@array, $offset, $len, @list);
-        };
-
-
-        *{"${class}::index_${field}"} =
-        *{"${class}::${field}_index"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_index"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @indices) = @_;
-            my @result = map { $array[$_] } @indices;
-            return $result[0] if @indices == 1;
-            wantarray ? @result : \@result;
-        };
-
-
-        *{"${class}::set_${field}"} =
-        *{"${class}::${field}_set"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_set"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-
-            my $self = shift;
-            my @args = @_;
-            croak "${class}::${field}_set expects an even number of fields\n"
-                if @args % 2;
-            while (my ($index, $value) = splice @args, 0, 2) {
-                $array[$index] = $value;
+        $self->install_accessor(
+            name => [ "push_${field}", "${field}_push" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_push"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                push @array => @_;
             }
-            return @_ / 2;
-        };
+        );
+
+
+        $self->install_accessor(
+            name => [ "pop_${field}", "${field}_pop" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_pop"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                pop @array;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "unshift_${field}", "${field}_unshift" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_unshift"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                unshift @array => @_;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "shift_${field}", "${field}_shift" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_shift"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                shift @array;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                @array = ();
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "count_${field}", "${field}_count" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_count"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                scalar @array;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "splice_${field}", "${field}_splice" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_splice"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, $offset, $len, @list) = @_;
+                splice(@array, $offset, $len, @list);
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "index_${field}", "${field}_index" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_index"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, @indices) = @_;
+                my @result = map { $array[$_] } @indices;
+                return $result[0] if @indices == 1;
+                wantarray ? @result : \@result;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "set_${field}", "${field}_set" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_set"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+
+                my $self = shift;
+                my @args = @_;
+                croak
+                    "${class}::${field}_set expects an even number of fields\n"
+                    if @args % 2;
+                while (my ($index, $value) = splice @args, 0, 2) {
+                    $array[$index] = $value;
+                }
+                return @_ / 2;
+            }
+        );
     }
 
     $self;  # for chaining
@@ -371,9 +431,7 @@ sub mk_hash_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
-
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my ($self, @list) = @_;
@@ -405,49 +463,60 @@ sub mk_hash_accessors {
                 }
                 return wantarray ? %{$self->{$field}} : $self->{$field};
             }
-        };
+        });
 
 
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            $self->{$field} = {};
-        };
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                $self->{$field} = {};
+            }
+        );
 
 
-        *{"${class}::keys_${field}"} =
-        *{"${class}::${field}_keys"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_keys"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            keys %{$_[0]->{$field}};
-        };
+        $self->install_accessor(
+            name => [ "keys_${field}", "${field}_keys" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_keys"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                keys %{$_[0]->{$field}};
+            }
+        );
 
 
-        *{"${class}::values_${field}"} =
-        *{"${class}::${field}_values"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_values"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            values %{$_[0]->{$field}};
-        };
-
-        *{"${class}::exists_${field}"} =
-        *{"${class}::${field}_exists"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_exists"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, $key) = @_;
-            exists $self->{$field} && exists $self->{$field}{$key};
-        };
+        $self->install_accessor(
+            name => [ "values_${field}", "${field}_values" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_values"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                values %{$_[0]->{$field}};
+            }
+        );
 
 
-        *{"${class}::delete_${field}"} =
-        *{"${class}::${field}_delete"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @keys) = @_;
-            delete @{$self->{$field}}{@keys};
-        };
+        $self->install_accessor(
+            name => [ "exists_${field}", "${field}_exists" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_exists"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, $key) = @_;
+                exists $self->{$field} && exists $self->{$field}{$key};
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "delete_${field}", "${field}_delete" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, @keys) = @_;
+                delete @{$self->{$field}}{@keys};
+            }
+        );
 
     }
     $self;  # for chaining
@@ -459,11 +528,10 @@ sub mk_class_hash_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
 
         my %hash;
 
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my ($self, @list) = @_;
@@ -493,47 +561,58 @@ sub mk_class_hash_accessors {
 
                 return wantarray ? %hash : \%hash;
             }
-        };
+        });
 
 
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            %hash = ();
-        };
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                %hash = ();
+            }
+        );
 
 
-        *{"${class}::keys_${field}"} =
-        *{"${class}::${field}_keys"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_keys"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            keys %hash;
-        };
+        $self->install_accessor(
+            name => [ "keys_${field}", "${field}_keys" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_keys"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                keys %hash;
+            }
+        );
 
 
-        *{"${class}::values_${field}"} =
-        *{"${class}::${field}_values"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_values"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            values %hash;
-        };
-
-        *{"${class}::exists_${field}"} =
-        *{"${class}::${field}_exists"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_exists"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            exists $hash{$_[1]};
-        };
+        $self->install_accessor(
+            name => [ "values_${field}", "${field}_values" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_values"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                values %hash;
+            }
+        );
 
 
-        *{"${class}::delete_${field}"} =
-        *{"${class}::${field}_delete"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @keys) = @_;
-            delete @hash{@keys};
-        };
+        $self->install_accessor(
+            name => [ "exists_${field}", "${field}_exists" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_exists"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                exists $hash{$_[1]};
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "delete_${field}", "${field}_delete" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, @keys) = @_;
+                delete @hash{@keys};
+            }
+        );
 
     }
     $self;  # for chaining
@@ -545,9 +624,7 @@ sub mk_abstract_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
-
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my $method = "${class}::${field}";
@@ -564,7 +641,7 @@ sub mk_abstract_accessors {
                     method => $method,
                 );
             }
-        };
+        });
     }
 
     $self;  # for chaining
@@ -576,28 +653,32 @@ sub mk_boolean_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
-
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             return $_[0]->{$field} if @_ == 1;
             $_[0]->{$field} = $_[1] ? 1 : 0;   # normalize
-        };
+        });
 
-        *{"${class}::set_${field}"} =
-        *{"${class}::${field}_set"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_set"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field} = 1;
-        };
 
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field} = 0;
-        };
+        $self->install_accessor(
+            name => [ "set_${field}", "${field}_set" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_set"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field} = 1;
+            }
+        );
+
+
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field} = 0;
+            }
+        );
     }
 
     $self;  # for chaining
@@ -609,39 +690,43 @@ sub mk_integer_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
-
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my $self = shift;
             return $self->{$field} || 0 unless @_;
             $self->{$field} = shift;
-        };
+        });
 
 
-        *{"${class}::reset_${field}"} =
-        *{"${class}::${field}_reset"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_reset"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field} = 0;
-        };
+        $self->install_accessor(
+            name => [ "reset_${field}", "${field}_reset" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_reset"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field} = 0;
+            }
+        );
 
 
-        *{"${class}::inc_${field}"} =
-        *{"${class}::${field}_inc"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_inc"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field}++;
-        };
+        $self->install_accessor(
+            name => [ "inc_${field}", "${field}_inc" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_inc"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field}++;
+            }
+        );
 
 
-        *{"${class}::dec_${field}"} =
-        *{"${class}::${field}_dec"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_dec"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field}--;
-        };
+        $self->install_accessor(
+            name => [ "dec_${field}", "${field}_dec" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_dec"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field}--;
+            }
+        );
     }
 
     $self;  # for chaining
@@ -653,13 +738,11 @@ sub mk_set_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        no strict 'refs';
-
         my $insert_method   = "${field}_insert";
         my $elements_method = "${field}_elements";
 
 
-        *{"${class}::${field}"} = sub {
+        $self->install_accessor(name => $field, code => sub {
             local $DB::sub = local *__ANON__ = "${class}::${field}"
                 if defined &DB::DB && !$Devel::DProf::VERSION;
             my $self = shift;
@@ -668,71 +751,86 @@ sub mk_set_accessors {
             } else {
                 $self->$elements_method;
             }
-        };
+        });
 
 
-        *{"${class}::insert_${field}"} =
-        *{"${class}::${insert_method}"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${insert_method}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            $self->{$field}{$_}++ for flatten(@_);
-        };
+        $self->install_accessor(
+            name => [ "insert_${field}", $insert_method ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${insert_method}"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                $self->{$field}{$_}++ for flatten(@_);
+            }
+        );
 
 
-        *{"${class}::elements_${field}"} =
-        *{"${class}::${elements_method}"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${elements_method}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            $self->{$field} ||= {};
-            keys %{ $self->{$field} }
-        };
+        $self->install_accessor(
+            name => [ "elements_${field}", $elements_method ],
+            code => sub {
+                local $DB::sub = local *__ANON__ =
+                    "${class}::${elements_method}"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                $self->{$field} ||= {};
+                keys %{ $self->{$field} }
+            }
+        );
 
 
-        *{"${class}::delete_${field}"} =
-        *{"${class}::${field}_delete"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            delete $self->{$field}{$_} for @_;
-        };
+        $self->install_accessor(
+            name => [ "delete_${field}", "${field}_delete" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                delete $self->{$field}{$_} for @_;
+            }
+        );
 
 
-        *{"${class}::clear_${field}"} =
-        *{"${class}::${field}_clear"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            $_[0]->{$field} = {};
-        };
+        $self->install_accessor(
+            name => [ "clear_${field}", "${field}_clear" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                $_[0]->{$field} = {};
+            }
+        );
 
 
-        *{"${class}::contains_${field}"} =
-        *{"${class}::${field}_contains"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_contains"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, $key) = @_;
-            return unless defined $key;
-            exists $self->{$field}{$key};
-        };
+        $self->install_accessor(
+            name => [ "contains_${field}", "${field}_contains" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_contains"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, $key) = @_;
+                return unless defined $key;
+                exists $self->{$field}{$key};
+            }
+        );
 
 
-        *{"${class}::is_empty_${field}"} =
-        *{"${class}::${field}_is_empty"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_is_empty"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            keys %{ $self->{$field} || {} } == 0;
-        };
+        $self->install_accessor(
+            name => [ "is_empty_${field}", "${field}_is_empty" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_is_empty"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                keys %{ $self->{$field} || {} } == 0;
+            }
+        );
 
 
-        *{"${class}::size_${field}"} =
-        *{"${class}::${field}_size"} = sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}_size"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            scalar keys %{ $self->{$field} || {} };
-        };
+        $self->install_accessor(
+            name => [ "size_${field}", "${field}_size" ],
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}_size"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my $self = shift;
+                scalar keys %{ $self->{$field} || {} };
+            }
+        );
 
     }
 
@@ -764,18 +862,15 @@ sub mk_object_accessors {
             }
 
             for my $meth (@composites) {
-                no strict 'refs';
-                *{"${class}::${meth}"} = sub {
+                $self->install_accessor(name => $meth, code => sub {
                     local $DB::sub = local *__ANON__ = "${class}::{$meth}"
                         if defined &DB::DB && !$Devel::DProf::VERSION;
                     my ($self, @args) = @_;
                     $self->$name()->$meth(@args);
-                };
+                });
             }
 
-            no strict 'refs';
-
-            *{"${class}::${name}"} = sub {
+            $self->install_accessor(name => $name, code => sub {
                 local $DB::sub = local *__ANON__ = "${class}::${name}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
                 my ($self, @args) = @_;
@@ -786,15 +881,16 @@ sub mk_object_accessors {
                         $self->{$name} = $type->new(@args);
                 }
                 $self->{$name};
-            };
+            });
 
 
-            *{"${class}::clear_${name}"} =
-            *{"${class}::${name}_clear"} = sub {
+            $self->install_accessor(
+                name => [ "clear_${name}", "${name}_clear" ],
+                code => sub {
                 local $DB::sub = local *__ANON__ = "${class}::${name}_clear"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
                 delete $_[0]->{$name};
-            };
+            });
         }
     }
 
@@ -810,13 +906,12 @@ sub mk_forward_accessors {
     while (my ($slot, $methods) = each %args) {
         my @methods = ref $methods eq 'ARRAY' ? @$methods : ($methods);
         for my $field (@methods) {
-            no strict 'refs';
-            *{"${class}::${field}"} = sub {
+            $self->install_accessor(name => $field, code => sub {
                 local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
                 my ($self, @args) = @_;
                 $self->$slot()->$field(@args);
-            };
+            });
         }
     }
 
@@ -828,5 +923,5 @@ sub mk_forward_accessors {
 
 __END__
 
-#line 1336
+#line 1437
 

@@ -1,5 +1,8 @@
 Revision history for Perl extension Class::Factory::Enhanced
 
+0.03  Mi Nov  7 01:07:39 CET 2007
+        - added get_factory_type_for()
+
 0.02  So Okt 21 21:50:03 CEST 2007
         - build_requires 'Class::Accessor::Complex'
 

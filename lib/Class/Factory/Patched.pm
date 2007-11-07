@@ -237,6 +237,18 @@ sub unregister_factory_type {
     }
 }
 
+
+sub get_factory_type_for {
+    my ( $self, $item ) = @_;
+    my $impl_class = ref( $item ) || $item;
+    my $impl_info = $FACTORY_INFO_BY_CLASS{ $impl_class };
+    if ( ref( $impl_info ) eq 'ARRAY' ) {
+        return $impl_info->[1];
+    }
+    return undef;
+}
+
+
 # END PATCH
 
 
