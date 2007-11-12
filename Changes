@@ -1,19 +1,41 @@
-Revision history for Perl extension Class::Factory::Enhanced
-
-0.05  Mi Nov  7 14:40:43 CET 2007
-        - Makefile.PL now requires Class::Factory 1.06 or better specifically.
-
-0.04  Mi Nov  7 08:03:33 CET 2007
-        - removed Class::Factory::Patched, since Fred Moyers accepted my
-          patches to Class::Factory. Class::Factory::Enhanced now subclasses
-          Class::Factory.
-
-0.03  Mi Nov  7 01:07:39 CET 2007
-        - added get_factory_type_for()
-
-0.02  So Okt 21 21:50:03 CEST 2007
-        - build_requires 'Class::Accessor::Complex'
-
-0.01  So Okt 21 20:03:24 CEST 2007
-        - original version
-
+---
+global:
+  name: Class::Factory::Enhanced
+releases:
+  - author: 'Marcel Gruenauer <marcel@cpan.org>'
+    changes:
+      - Added requirement for Class::Accessor::Installer
+    date: 2007-11-12T00:08:52Z
+    tags:
+      - BUGFIX
+    version: 0.06
+  - author: 'Marcel Gruenauer <marcel@cpan.org>'
+    changes:
+      - Makefile.PL now requires Class::Factory 1.06 or better specifically.
+    date: 2007-11-07T14:40:43+01:00
+    tags: []
+    version: 0.05
+  - author: 'Marcel Gruenauer <marcel@cpan.org>'
+    changes:
+      - 'removed Class::Factory::Patched, since Fred Moyers accepted my patches to Class::Factory. Class::Factory::Enhanced now subclasses Class::Factory.'
+    date: 2007-11-07T08:03:33+01:00
+    tags: []
+    version: 0.04
+  - author: 'Marcel Gruenauer <marcel@cpan.org>'
+    changes:
+      - added get_factory_type_for()
+    date: 2007-11-07T01:07:39+01:00
+    tags: []
+    version: 0.03
+  - author: 'Marcel Gruenauer <marcel@cpan.org>'
+    changes:
+      - build_requires 'Class::Accessor::Complex'
+    date: 2007-10-21T21:50:03+02:00
+    tags: []
+    version: 0.02
+  - author: 'Marcel Gruenauer <marcel@cpan.org>'
+    changes:
+      - original version
+    date: 2007-10-21T20:03:24+02:00
+    tags: []
+    version: 0.01

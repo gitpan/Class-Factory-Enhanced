@@ -19,20 +19,32 @@ sub mk_new {
     @args = ('new') unless @args;
 
     for my $name (@args) {
-        $self->install_accessor(name => $name, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${name}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            # don't use $class, as that's already defined above
-            my $this_class = shift;
-            my $self = ref ($this_class) ? $this_class : bless {}, $this_class;
-            my %args = (scalar(@_ == 1) && ref($_[0]) eq 'HASH')
-                ? %{ $_[0] }
-                : @_;
+        $self->install_accessor(
+            name => $name,
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${name}"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                # don't use $class, as that's already defined above
+                my $this_class = shift;
+                my $self = ref ($this_class)
+                    ? $this_class : bless {}, $this_class;
+                my %args = (scalar(@_ == 1) && ref($_[0]) eq 'HASH')
+                    ? %{ $_[0] }
+                    : @_;
 
-            $self->$_($args{$_}) for keys %args;
-            $self->init(%args) if $self->can('init');
-            $self;
-        });
+                $self->$_($args{$_}) for keys %args;
+                $self->init(%args) if $self->can('init');
+                $self;
+            },
+            purpose => <<'EODOC',
+A constructor. It can take named arguments which are used to set the object's
+accessors.
+EODOC
+            example => [
+                "$class->$name;",
+                "$class->$name(\%args);",
+            ],
+        );
     }
 
     $self;  # for chaining
@@ -76,21 +88,38 @@ sub mk_scalar_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            return $_[0]->{$field} if @_ == 1;
-            $_[0]->{$field} = $_[1];
-        });
-
         $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field} = undef;
-            }
+                return $_[0]->{$field} if @_ == 1;
+                $_[0]->{$field} = $_[1];
+            },
+            purpose => <<'EODOC',
+A basic getter/setter method. If called without an argument, it returns the
+value. If called with a single argument, it sets the value.
+EODOC
+            example => [
+                "my \$value = \$obj->$field;",
+                "\$obj->$field(\$value);",
+            ],
         );
+
+        for my $name ("clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field} = undef;
+                },
+                purpose => <<'EODOC',
+Clears the value.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -175,122 +204,217 @@ sub mk_array_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @list) = @_;
-            defined $self->{$field} or $self->{$field} = [];
-
-            @{$self->{$field}} = map { ref $_ eq 'ARRAY' ? @$_ : ($_) } @list
-                if @list;
-
-            wantarray ? @{$self->{$field}} : $self->{$field};
-        });
-
-
         $self->install_accessor(
-            name => [ "push_${field}", "${field}_push" ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_push"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                push @{$self->{$field}} => @_;
-            }
+                my ($self, @list) = @_;
+                defined $self->{$field} or $self->{$field} = [];
+
+                @{$self->{$field}} =
+                    map { ref $_ eq 'ARRAY' ? @$_ : ($_) }
+                    @list
+                    if @list;
+
+                wantarray ? @{$self->{$field}} : $self->{$field};
+            },
+            purpose => <<'EODOC',
+Get or set the array values. If called without an arguments, it returns the
+array in list context, or a reference to the array in scalar context. If
+called with arguments, it expands array references found therein and sets the
+values.
+EODOC
+            example => [
+                "my \@values    = \$obj->$field;",
+                "my \$array_ref = \$obj->$field;",
+                "\$obj->$field(\@values);",
+                "\$obj->$field(\$array_ref);",
+            ],
         );
 
 
-        $self->install_accessor(
-            name => [ "pop_${field}", "${field}_pop" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_pop"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                pop @{$_[0]->{$field}};
-            }
-        );
+        for my $name ("push_${field}", "${field}_push") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    push @{$self->{$field}} => @_;
+                },
+                purpose => <<'EODOC',
+Pushes elements onto the end of the array.
+EODOC
+                example => "\$obj->$name(\@values);",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "unshift_${field}", "${field}_unshift" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_unshift"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                unshift @{$self->{$field}} => @_;
-            }
-        );
+        for my $name ("pop_${field}", "${field}_pop") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    pop @{$_[0]->{$field}};
+                },
+                purpose => <<'EODOC',
+Pops the last element off the array, returning it.
+EODOC
+                example => "my \$value = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "shift_${field}", "${field}_shift" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_shift"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                shift @{$_[0]->{$field}};
-            }
-        );
+        for my $name ("unshift_${field}", "${field}_unshift") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    unshift @{$self->{$field}} => @_;
+                },
+                purpose => <<'EODOC',
+Unshifts elements onto the beginning of the array.
+EODOC
+                example => "\$obj->$name(\@values);",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field} = [];
-            }
-        );
+        for my $name ("shift_${field}", "${field}_shift") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    shift @{$_[0]->{$field}};
+                },
+                purpose => <<'EODOC',
+Shifts the first element off the array, returning it.
+EODOC
+                example => "my \$value = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "count_${field}", "${field}_count" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_count"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                exists $_[0]->{$field} ? scalar @{$_[0]->{$field}} : 0;
-            }
-        );
+        for my $name ("clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field} = [];
+                },
+                purpose => <<'EODOC',
+Deletes all elements from the array.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "splice_${field}", "${field}_splice" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_splice"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, $offset, $len, @list) = @_;
-                splice(@{$self->{$field}}, $offset, $len, @list);
-            }
-        );
+        for my $name ("count_${field}", "${field}_count") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    exists $_[0]->{$field} ? scalar @{$_[0]->{$field}} : 0;
+                },
+                purpose => <<'EODOC',
+Returns the number of elements in the array.
+EODOC
+                example => "my \$count = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "index_${field}", "${field}_index" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_index"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, @indices) = @_;
-                my @result = map { $self->{$field}[$_] } @indices;
-                return $result[0] if @indices == 1;
-                wantarray ? @result : \@result;
-            }
-        );
+        for my $name ("splice_${field}", "${field}_splice") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, $offset, $len, @list) = @_;
+                    splice(@{$self->{$field}}, $offset, $len, @list);
+                },
+                purpose => <<'EODOC',
+Takes three arguments: An offset, a length and a list.
+
+Removes the elements designated by the offset and the length from the array,
+and replaces them with the elements of the list, if any. In list context,
+returns the elements removed from the array. In scalar context, returns the
+last element removed, or C<undef> if no elements are removed. The array grows
+or shrinks as necessary. If the offset is negative then it starts that far
+from the end of the array. If the length is omitted, removes everything from
+the offset onward. If the length is negative, removes the elements from the
+offset onward except for -length elements at the end of the array. If both the
+offset and the length are omitted, removes everything. If the offset is past
+the end of the array, it issues a warning, and splices at the end of the
+array.
+EODOC
+                example => [
+                    "\$obj->$name(2, 1, \$x, \$y);",
+                    "\$obj->$name(-1);",
+                    "\$obj->$name(0, -1);",
+                ],
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "set_${field}", "${field}_set" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_set"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
+        for my $name ("index_${field}", "${field}_index") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, @indices) = @_;
+                    my @result = map { $self->{$field}[$_] } @indices;
+                    return $result[0] if @indices == 1;
+                    wantarray ? @result : \@result;
+                },
+                purpose => <<'EODOC',
+Takes a list of indices and returns the elements indicated by those indices.
+If only one index is given, the corresponding array element is returned. If
+several indices are given, the result is returned as an array in list context
+or as an array reference in scalar context.
+EODOC
+                example => [
+                    "my \$element   = \$obj->$name(3);",
+                    "my \@elements  = \$obj->$name(\@indices);",
+                    "my \$array_ref = \$obj->$name(\@indices);",
+                ],
+            );
+        }
 
-                my $self = shift;
-                my @args = @_;
-                croak
-                    "${class}::${field}_set expects an even number of fields\n"
-                    if @args % 2;
-                while (my ($index, $value) = splice @args, 0, 2) {
-                    $self->{$field}->[$index] = $value;
-                }
-                return @_ / 2;
-            }
-        );
+
+        for my $name ("set_${field}", "${field}_set") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${$name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+
+                    my $self = shift;
+                    my @args = @_;
+                    croak "${class}::${field}_set expects an even number of fields\n"
+                        if @args % 2;
+                    while (my ($index, $value) = splice @args, 0, 2) {
+                        $self->{$field}->[$index] = $value;
+                    }
+                    return @_ / 2;
+                },
+                purpose => <<'EODOC',
+Takes a list of index/value pairs and for each pair it sets the array element
+at the indicated index to the indicated value. Returns the number of elements
+that have been set.
+EODOC
+                example => "\$obj->$name(1 => \$x, 5 => \$y);",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -923,5 +1047,5 @@ sub mk_forward_accessors {
 
 __END__
 
-#line 1437
+#line 1561
 

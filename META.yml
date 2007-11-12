@@ -19,6 +19,7 @@ no_index:
     - inc
     - t
 requires: 
+  Class::Accessor::Installer: 0
   Class::Factory: 1.06
   perl: 5.6.0
-version: 0.05
+version: 0.06
