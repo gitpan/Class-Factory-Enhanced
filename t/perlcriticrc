@@ -1,5 +1,12 @@
-[-BuiltinFunctions::ProhibitStringyEval]
+# no strict 'refs'
+[TestingAndDebugging::ProhibitNoStrict]
+allow = refs
 
-# because Class::Factory does that and I didn't want to change the original
-# code:
+[-BuiltinFunctions::ProhibitStringyEval]
+[-ControlStructures::ProhibitMutatingListFunctions]
 [-Subroutines::ProhibitExplicitReturnUndef]
+[-Subroutines::ProhibitSubroutinePrototypes]
+[-Variables::ProhibitConditionalDeclarations]
+
+# for mkdir $dir, 0777
+[-ValuesAndExpressions::ProhibitLeadingZeros]

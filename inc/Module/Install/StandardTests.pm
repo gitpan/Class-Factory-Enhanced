@@ -6,7 +6,7 @@ use strict;
 use File::Spec;
 
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 
 use base 'Module::Install::Base';
@@ -136,5 +136,7 @@ sub write_standard_test_perl_critic {
 
 __END__
 
-#line 250
+{% USE p = PodGenerated %}
+
+#line 239
 

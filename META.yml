@@ -1,7 +1,7 @@
 --- 
 abstract: more functionality for Class::Factory
 author: 
-  - Marcel GrE<uuml>nauer, C<< <marcel@cpan.org> >>
+  - "{% ELSE %}"
 build_requires: 
   Class::Accessor::Complex: 0
   Test::Compile: 0
@@ -22,4 +22,4 @@ requires:
   Class::Accessor::Installer: 0
   Class::Factory: 1.06
   perl: 5.6.0
-version: 0.06
+version: 0.07

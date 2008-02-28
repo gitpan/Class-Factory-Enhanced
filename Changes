@@ -1,11 +1,23 @@
 ---
 global:
-  name: Class::Factory::Enhanced
+  name: Class-Factory-Enhanced
 releases:
   - author: 'Marcel Gruenauer <marcel@cpan.org>'
     changes:
+      - set the version to 0.07
+      - 'Changes: fixed global.name'
+    date: 2007-11-29T16:29:04Z
+    tags: []
+    version: 0.07
+  - author: 'Marcel Gruenauer <marcel@cpan.org>'
+    changes:
       - Added requirement for Class::Accessor::Installer
-    date: 2007-11-12T00:08:52Z
+      - '.shipit: added Twitter step'
+      - 'Makefile.PL: added auto_install() and process_templates()'
+      - 'lib/*: converted to template'
+      - updated MANIFEST
+      - updated t/perlcriticrc
+    date: 2007-11-21T18:21:11Z
     tags:
       - BUGFIX
     version: 0.06

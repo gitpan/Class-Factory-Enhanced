@@ -5,9 +5,10 @@ use warnings;
 use strict;
 use Carp qw(carp croak cluck);
 use Data::Miscellany 'flatten';
+use List::MoreUtils 'uniq';
 
 
-our $VERSION = '0.11';
+our $VERSION = '0.13';
 
 
 use base qw(Class::Accessor Class::Accessor::Installer);
@@ -37,12 +38,15 @@ sub mk_new {
                 $self;
             },
             purpose => <<'EODOC',
-A constructor. It can take named arguments which are used to set the object's
-accessors.
+Creates and returns a new object. The constructor will accept as arguments a
+list of pairs, from component name to initial value. For each pair, the named
+component is initialized by calling the method of the same name with the given
+value. If called with a single hash reference, it is dereferenced and its
+key/value pairs are set as described before.
 EODOC
             example => [
-                "$class->$name;",
-                "$class->$name(\%args);",
+                "my \$obj = $class->$name;",
+                "my \$obj = $class->$name(\%args);",
             ],
         );
     }
@@ -59,24 +63,40 @@ sub mk_singleton {
     my $singleton;
 
     for my $name (@args) {
-        $self->install_accessor(name => $name, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${name}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            return $singleton if defined $singleton;
+        $self->install_accessor(
+            name => $name,
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${name}"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                return $singleton if defined $singleton;
 
-            # don't use $class, as that's already defined above
-            my $this_class = shift;
-            $singleton = ref ($this_class)
-                ? $this_class
-                : bless {}, $this_class;
-            my %args = (scalar(@_ == 1) && ref($_[0]) eq 'HASH')
-                ? %{ $_[0] }
-                : @_;
+                # don't use $class, as that's already defined above
+                my $this_class = shift;
+                $singleton = ref ($this_class)
+                    ? $this_class
+                    : bless {}, $this_class;
+                my %args = (scalar(@_ == 1) && ref($_[0]) eq 'HASH')
+                    ? %{ $_[0] }
+                    : @_;
 
-            $singleton->$_($args{$_}) for keys %args;
-            $singleton->init(%args) if $singleton->can('init');
-            $singleton;
-        });
+                $singleton->$_($args{$_}) for keys %args;
+                $singleton->init(%args) if $singleton->can('init');
+                $singleton;
+            },
+            purpose => <<'EODOC',
+Creates and returns a new object. The object will be a singleton, so repeated
+calls to the constructor will always return the same object. The constructor
+will accept as arguments a list of pairs, from component name to initial
+value. For each pair, the named component is initialized by calling the
+method of the same name with the given value. If called with a single hash
+reference, it is dereferenced and its key/value pairs are set as described
+before.
+EODOC
+            example => [
+                "my \$obj = $class->$name;",
+                "my \$obj = $class->$name(\%args);",
+            ],
+        );
     }
 
     $self;  # for chaining
@@ -106,7 +126,7 @@ EODOC
             ],
         );
 
-        for my $name ("clear_${field}", "${field}_clear") {
+        for my $name (uniq "clear_${field}", "${field}_clear") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -134,21 +154,41 @@ sub mk_class_scalar_accessors {
 
         my $scalar;
 
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            return $scalar if @_ == 1;
-            $scalar = $_[1];
-        });
-
         $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
-                $scalar = undef;
-            }
+                return $scalar if @_ == 1;
+                $scalar = $_[1];
+            },
+            purpose => <<'EODOC',
+A basic getter/setter method. This is a class variable, so it is shared
+between all instances of this class. Changing it in one object will change it
+for all other objects as well. If called without an argument, it returns the
+value. If called with a single argument, it sets the value.
+EODOC
+            example => [
+                "my \$value = \$obj->$field;",
+                "\$obj->$field(\$value);",
+            ],
         );
+
+        for my $name (uniq "clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $scalar = undef;
+                },
+                purpose => <<'EODOC',
+Clears the value. Since this is a class variable, the value will be undefined
+for all instances of this class.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -169,30 +209,47 @@ sub mk_concat_accessors {
             ($field, $join) = @$arg;
         }
 
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, $text) = @_;
-
-            if (defined $text) {
-                if (defined $self->{$field}) {
-                    $self->{$field} = $self->{$field} . $join . $text;
-                } else {
-                    $self->{$field} = $text;
-                }
-            }
-            return $self->{$field};
-        });
-
         $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field} = undef;
-            }
+                my ($self, $text) = @_;
+
+                if (defined $text) {
+                    if (defined $self->{$field}) {
+                        $self->{$field} = $self->{$field} . $join . $text;
+                    } else {
+                        $self->{$field} = $text;
+                    }
+                }
+                return $self->{$field};
+            },
+            # FIXME use the current value of $join in the docs
+            purpose => <<'EODOC',
+A getter/setter method. If called without an argument, it returns the
+value. If called with a single argument, it appends to the current value.
+EODOC
+            example => [
+                "my \$value = \$obj->$field;",
+                "\$obj->$field(\$value);",
+            ],
         );
 
+        for my $name (uniq "clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field} = undef;
+                },
+                purpose => <<'EODOC',
+Clears the value.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -234,7 +291,7 @@ EODOC
         );
 
 
-        for my $name ("push_${field}", "${field}_push") {
+        for my $name (uniq "push_${field}", "${field}_push") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -251,7 +308,7 @@ EODOC
         }
 
 
-        for my $name ("pop_${field}", "${field}_pop") {
+        for my $name (uniq "pop_${field}", "${field}_pop") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -267,7 +324,7 @@ EODOC
         }
 
 
-        for my $name ("unshift_${field}", "${field}_unshift") {
+        for my $name (uniq "unshift_${field}", "${field}_unshift") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -284,7 +341,7 @@ EODOC
         }
 
 
-        for my $name ("shift_${field}", "${field}_shift") {
+        for my $name (uniq "shift_${field}", "${field}_shift") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -300,7 +357,7 @@ EODOC
         }
 
 
-        for my $name ("clear_${field}", "${field}_clear") {
+        for my $name (uniq "clear_${field}", "${field}_clear") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -316,7 +373,7 @@ EODOC
         }
 
 
-        for my $name ("count_${field}", "${field}_count") {
+        for my $name (uniq "count_${field}", "${field}_count") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -332,7 +389,7 @@ EODOC
         }
 
 
-        for my $name ("splice_${field}", "${field}_splice") {
+        for my $name (uniq "splice_${field}", "${field}_splice") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -365,7 +422,7 @@ EODOC
         }
 
 
-        for my $name ("index_${field}", "${field}_index") {
+        for my $name (uniq "index_${field}", "${field}_index") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -391,7 +448,7 @@ EODOC
         }
 
 
-        for my $name ("set_${field}", "${field}_set") {
+        for my $name (uniq "set_${field}", "${field}_set") {
             $self->install_accessor(
                 name => $name,
                 code => sub {
@@ -429,121 +486,231 @@ sub mk_class_array_accessors {
 
         my @array;
 
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @list) = @_;
-
-            @array = map { ref $_ eq 'ARRAY' ? @$_ : ($_) } @list
-                if @list;
-
-            wantarray ? @array : \@array
-        });
-
-
         $self->install_accessor(
-            name => [ "push_${field}", "${field}_push" ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_push"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                push @array => @_;
-            }
+                my ($self, @list) = @_;
+
+                @array = map { ref $_ eq 'ARRAY' ? @$_ : ($_) } @list
+                    if @list;
+
+                wantarray ? @array : \@array
+            },
+            purpose => <<'EODOC',
+Get or set the array values. If called without an arguments, it returns the
+array in list context, or a reference to the array in scalar context. If
+called with arguments, it expands array references found therein and sets the
+values.
+
+This is a class variable, so it is shared between all instances of this class.
+Changing it in one object will change it for all other objects as well.
+EODOC
+            example => [
+                "my \@values    = \$obj->$field;",
+                "my \$array_ref = \$obj->$field;",
+                "\$obj->$field(\@values);",
+                "\$obj->$field(\$array_ref);",
+            ],
         );
 
 
-        $self->install_accessor(
-            name => [ "pop_${field}", "${field}_pop" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_pop"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                pop @array;
-            }
-        );
+        for my $name (uniq "push_${field}", "${field}_push") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    push @array => @_;
+                },
+                purpose => <<'EODOC',
+Pushes elements onto the end of the array. Since this is a class variable, the
+value will be changed for all instances of this class.
+EODOC
+                example => "\$obj->$name(\@values);",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "unshift_${field}", "${field}_unshift" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_unshift"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                unshift @array => @_;
-            }
-        );
+        for my $name (uniq "pop_${field}", "${field}_pop") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    pop @array;
+                },
+                purpose => <<'EODOC',
+Pops the last element off the array, returning it. Since this is a class
+variable, the value will be changed for all instances of this class.
+EODOC
+                example => "my \$value = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "shift_${field}", "${field}_shift" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_shift"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                shift @array;
-            }
-        );
+        for my $name (uniq "unshift_${field}", "${field}_unshift") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    unshift @array => @_;
+                },
+                purpose => <<'EODOC',
+Unshifts elements onto the beginning of the array. Since this is a class
+variable, the value will be changed for all instances of this class.
+EODOC
+                example => "\$obj->$name(\@values);",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                @array = ();
-            }
-        );
+        for my $name (uniq "shift_${field}", "${field}_shift") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    shift @array;
+                },
+                purpose => <<'EODOC',
+Shifts the first element off the array, returning it. Since this is a class
+variable, the value will be changed for all instances of this class.
+EODOC
+                example => "my \$value = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "count_${field}", "${field}_count" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_count"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                scalar @array;
-            }
-        );
+        for my $name (uniq "clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    @array = ();
+                },
+                purpose => <<'EODOC',
+Deletes all elements from the array. Since this is a class variable, the value
+will be changed for all instances of this class.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "splice_${field}", "${field}_splice" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_splice"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, $offset, $len, @list) = @_;
-                splice(@array, $offset, $len, @list);
-            }
-        );
+        for my $name (uniq "count_${field}", "${field}_count") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    scalar @array;
+                },
+                purpose => <<'EODOC',
+Returns the number of elements in the array. Since this is a class variable,
+the value will be changed for all instances of this class.
+EODOC
+                example => "my \$count = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "index_${field}", "${field}_index" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_index"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, @indices) = @_;
-                my @result = map { $array[$_] } @indices;
-                return $result[0] if @indices == 1;
-                wantarray ? @result : \@result;
-            }
-        );
+        for my $name (uniq "splice_${field}", "${field}_splice") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, $offset, $len, @list) = @_;
+                    splice(@array, $offset, $len, @list);
+                },
+                purpose => <<'EODOC',
+Takes three arguments: An offset, a length and a list.
+
+Removes the elements designated by the offset and the length from the array,
+and replaces them with the elements of the list, if any. In list context,
+returns the elements removed from the array. In scalar context, returns the
+last element removed, or C<undef> if no elements are removed. The array grows
+or shrinks as necessary. If the offset is negative then it starts that far
+from the end of the array. If the length is omitted, removes everything from
+the offset onward. If the length is negative, removes the elements from the
+offset onward except for -length elements at the end of the array. If both the
+offset and the length are omitted, removes everything. If the offset is past
+the end of the array, it issues a warning, and splices at the end of the
+array.
+
+Since this is a class variable, the value will be changed for all instances of
+this class.
+EODOC
+                example => [
+                    "\$obj->$name(2, 1, \$x, \$y);",
+                    "\$obj->$name(-1);",
+                    "\$obj->$name(0, -1);",
+                ],
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "set_${field}", "${field}_set" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_set"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
+        for my $name (uniq "index_${field}", "${field}_index") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, @indices) = @_;
+                    my @result = map { $array[$_] } @indices;
+                    return $result[0] if @indices == 1;
+                    wantarray ? @result : \@result;
+                },
+                purpose => <<'EODOC',
+Takes a list of indices and returns the elements indicated by those indices.
+If only one index is given, the corresponding array element is returned. If
+several indices are given, the result is returned as an array in list context
+or as an array reference in scalar context.
 
-                my $self = shift;
-                my @args = @_;
-                croak
-                    "${class}::${field}_set expects an even number of fields\n"
-                    if @args % 2;
-                while (my ($index, $value) = splice @args, 0, 2) {
-                    $array[$index] = $value;
-                }
-                return @_ / 2;
-            }
-        );
+Since this is a class variable, the value will be changed for all instances of
+this class.
+EODOC
+                example => [
+                    "my \$element   = \$obj->$name(3);",
+                    "my \@elements  = \$obj->$name(\@indices);",
+                    "my \$array_ref = \$obj->$name(\@indices);",
+                ],
+            );
+        }
+
+
+        for my $name (uniq "set_${field}", "${field}_set") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+
+                    my $self = shift;
+                    my @args = @_;
+                    croak
+                        "${class}::${field}_set expects an even number of fields\n"
+                        if @args % 2;
+                    while (my ($index, $value) = splice @args, 0, 2) {
+                        $array[$index] = $value;
+                    }
+                    return @_ / 2;
+                },
+                purpose => <<'EODOC',
+Takes a list of index/value pairs and for each pair it sets the array element
+at the indicated index to the indicated value. Returns the number of elements
+that have been set. Since this is a class variable, the value will be changed
+for all instances of this class.
+EODOC
+                example => "\$obj->$name(1 => \$x, 5 => \$y);",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -555,92 +722,153 @@ sub mk_hash_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @list) = @_;
-            defined $self->{$field} or $self->{$field} = {};
-            if (scalar @list == 1) {
-                my ($key) = @list;
+        $self->install_accessor(
+            name => $field,
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, @list) = @_;
+                defined $self->{$field} or $self->{$field} = {};
+                if (scalar @list == 1) {
+                    my ($key) = @list;
 
-                if (my $type = ref $key) {
-                    if ($type eq 'ARRAY') {
-                        return @{$self->{$field}}{@$key};
-                    } elsif ($type eq 'HASH') {
-                        while (my ($subkey, $value) = each %$key) {
-                            $self->{$field}->{$subkey} = $value;
+                    if (my $type = ref $key) {
+                        if ($type eq 'ARRAY') {
+                            return @{$self->{$field}}{@$key};
+                        } elsif ($type eq 'HASH') {
+                            while (my ($subkey, $value) = each %$key) {
+                                $self->{$field}{$subkey} = $value;
+                            }
+                            return wantarray
+                                ? %{$self->{$field}} : $self->{$field};
+                        } else {
+                            cluck
+                                "Unrecognized ref type for hash method: $type.";
                         }
-                        return wantarray ? %{$self->{$field}} : $self->{$field};
                     } else {
-                        cluck "Unrecognized ref type for hash method: $type.";
+                        return $self->{$field}{$key};
                     }
                 } else {
-                    return $self->{$field}->{$key};
+                    while (1) {
+                        my $key = shift @list;
+                        defined $key or last;
+                        my $value = shift @list;
+                        defined $value or carp "No value for key $key.";
+                        $self->{$field}{$key} = $value;
+                    }
+                    return wantarray ? %{$self->{$field}} : $self->{$field};
                 }
-            } else {
-                while (1) {
-                    my $key = shift @list;
-                    defined $key or last;
-                    my $value = shift @list;
-                    defined $value or carp "No value for key $key.";
-                    $self->{$field}->{$key} = $value;
-                }
-                return wantarray ? %{$self->{$field}} : $self->{$field};
-            }
-        });
+            },
+            purpose => <<'EODOC',
+Get or set the hash values. If called without arguments, it returns the hash
+in list context, or a reference to the hash in scalar context. If called
+with a list of key/value pairs, it sets each key to its corresponding value,
+then returns the hash as described before.
 
+If called with exactly one key, it returns the corresponding value.
 
-        $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                $self->{$field} = {};
-            }
+If called with exactly one array reference, it returns an array whose elements
+are the values corresponding to the keys in the argument array, in the same
+order. The resulting list is returned as an array in list context, or a
+reference to the array in scalar context.
+
+If called with exactly one hash reference, it updates the hash with the given
+key/value pairs, then returns the hash in list context, or a reference to the
+hash in scalar context.
+EODOC
+            example => [
+                "my \%hash     = \$obj->$field;",
+                "my \$hash_ref = \$obj->$field;",
+                "my \$value    = \$obj->$field(\$key);",
+                "my \@values   = \$obj->$field([ qw(foo bar) ]);",
+                "\$obj->$field(\%other_hash);",
+                "\$obj->$field(foo => 23, bar => 42);",
+            ],
         );
 
 
-        $self->install_accessor(
-            name => [ "keys_${field}", "${field}_keys" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_keys"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                keys %{$_[0]->{$field}};
-            }
-        );
+        for my $name (uniq "clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    $self->{$field} = {};
+                },
+                purpose => <<'EODOC',
+Deletes all keys and values from the hash.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "values_${field}", "${field}_values" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_values"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                values %{$_[0]->{$field}};
-            }
-        );
+        for my $name (uniq "keys_${field}", "${field}_keys") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    keys %{$_[0]->{$field}};
+                },
+                purpose => <<'EODOC',
+Returns a list of all hash keys in no particular order.
+EODOC
+                example => "my \@keys = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "exists_${field}", "${field}_exists" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_exists"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, $key) = @_;
-                exists $self->{$field} && exists $self->{$field}{$key};
-            }
-        );
+        for my $name (uniq "values_${field}", "${field}_values") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    values %{$_[0]->{$field}};
+                },
+                purpose => <<'EODOC',
+Returns a list of all hash values in no particular order.
+EODOC
+                example => "my \@values = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "delete_${field}", "${field}_delete" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, @keys) = @_;
-                delete @{$self->{$field}}{@keys};
-            }
-        );
+        for my $name (uniq "exists_${field}", "${field}_exists") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, $key) = @_;
+                    exists $self->{$field} && exists $self->{$field}{$key};
+                },
+                purpose => <<'EODOC',
+Takes a key and returns a true value if the key exists in the hash, and a
+false value otherwise.
+EODOC
+                example => "if (\$obj->$name(\$key)) { ... }",
+            );
+        }
+
+
+        for my $name (uniq "delete_${field}", "${field}_delete") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, @keys) = @_;
+                    delete @{$self->{$field}}{@keys};
+                },
+                purpose => <<'EODOC',
+Takes a list of keys and deletes those keys from the hash.
+EODOC
+                example => "\$obj->$name(\@keys);",
+            );
+        }
 
     }
     $self;  # for chaining
@@ -655,88 +883,156 @@ sub mk_class_hash_accessors {
 
         my %hash;
 
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my ($self, @list) = @_;
-            if (scalar @list == 1) {
-                my ($key) = @list;
+        $self->install_accessor(
+            name => $field,
+            code => sub {
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
+                    if defined &DB::DB && !$Devel::DProf::VERSION;
+                my ($self, @list) = @_;
+                if (scalar @list == 1) {
+                    my ($key) = @list;
 
-                return $hash{$key} unless ref $key;
+                    return $hash{$key} unless ref $key;
 
-                return @hash{@$key} if ref $key eq 'ARRAY';
+                    return @hash{@$key} if ref $key eq 'ARRAY';
 
-                if (ref($key) eq 'HASH') {
-                    %hash = (%hash, %$key);
+                    if (ref($key) eq 'HASH') {
+                        %hash = (%hash, %$key);
+                        return wantarray ? %hash : \%hash;
+                    }
+
+                    # not a scalar, array or hash...
+                    cluck sprintf
+                        'Not a recognized ref type for static hash [%s]',
+                        ref($key);
+                } else {
+                     while (1) {
+                         my $key = shift @list;
+                         defined $key or last;
+                         my $value = shift @list;
+                         defined $value or carp "No value for key $key.";
+                         $hash{$key} = $value;
+                     }
+
                     return wantarray ? %hash : \%hash;
                 }
+            },
+            purpose => <<'EODOC',
+Get or set the hash values. If called without arguments, it returns the hash
+in list context, or a reference to the hash in scalar context. If called
+with a list of key/value pairs, it sets each key to its corresponding value,
+then returns the hash as described before.
 
-                # not a scalar, array or hash...
-                cluck sprintf 'Not a recognized ref type for static hash [%s]',
-                    ref($key);
-            } else {
-                 while (1) {
-                     my $key = shift @list;
-                     defined $key or last;
-                     my $value = shift @list;
-                     defined $value or carp "No value for key $key.";
-                     $hash{$key} = $value;
-                 }
+If called with exactly one key, it returns the corresponding value.
 
-                return wantarray ? %hash : \%hash;
-            }
-        });
+If called with exactly one array reference, it returns an array whose elements
+are the values corresponding to the keys in the argument array, in the same
+order. The resulting list is returned as an array in list context, or a
+reference to the array in scalar context.
 
+If called with exactly one hash reference, it updates the hash with the given
+key/value pairs, then returns the hash in list context, or a reference to the
+hash in scalar context.
 
-        $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                %hash = ();
-            }
+This is a class variable, so it is shared between all instances of this class.
+Changing it in one object will change it for all other objects as well.
+EODOC
+            example => [
+                "my \%hash     = \$obj->$field;",
+                "my \$hash_ref = \$obj->$field;",
+                "my \$value    = \$obj->$field(\$key);",
+                "my \@values   = \$obj->$field([ qw(foo bar) ]);",
+                "\$obj->$field(\%other_hash);",
+                "\$obj->$field(foo => 23, bar => 42);",
+            ],
         );
 
 
-        $self->install_accessor(
-            name => [ "keys_${field}", "${field}_keys" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_keys"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                keys %hash;
-            }
-        );
+        for my $name (uniq "clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    %hash = ();
+                },
+                purpose => <<'EODOC',
+Deletes all keys and values from the hash. Since this is a class variable, the
+value will be changed for all instances of this class.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "values_${field}", "${field}_values" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_values"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                values %hash;
-            }
-        );
+        for my $name (uniq "keys_${field}", "${field}_keys") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    keys %hash;
+                },
+                purpose => <<'EODOC',
+Returns a list of all hash keys in no particular order. Since this is a class
+variable, the value will be changed for all instances of this class.
+EODOC
+                example => "my \@keys = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "exists_${field}", "${field}_exists" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_exists"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                exists $hash{$_[1]};
-            }
-        );
+        for my $name (uniq "values_${field}", "${field}_values") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    values %hash;
+                },
+                purpose => <<'EODOC',
+Returns a list of all hash values in no particular order. Since this is a
+class variable, the value will be changed for all instances of this class.
+EODOC
+                example => "my \@values = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "delete_${field}", "${field}_delete" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, @keys) = @_;
-                delete @hash{@keys};
-            }
-        );
+        for my $name (uniq "exists_${field}", "${field}_exists") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    exists $hash{$_[1]};
+                },
+                purpose => <<'EODOC',
+Takes a key and returns a true value if the key exists in the hash, and a
+false value otherwise. Since this is a class variable, the value will be
+changed for all instances of this class.
+EODOC
+                example => "if (\$obj->$name(\$key)) { ... }",
+            );
+        }
+
+
+        for my $name (uniq "delete_${field}", "${field}_delete") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, @keys) = @_;
+                    delete @hash{@keys};
+                },
+                purpose => <<'EODOC',
+Takes a list of keys and deletes those keys from the hash. Since this is a
+class variable, the value will be changed for all instances of this class.
+EODOC
+                example => "\$obj->$name(\@keys);",
+            );
+        }
 
     }
     $self;  # for chaining
@@ -777,32 +1073,56 @@ sub mk_boolean_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            return $_[0]->{$field} if @_ == 1;
-            $_[0]->{$field} = $_[1] ? 1 : 0;   # normalize
-        });
-
-
         $self->install_accessor(
-            name => [ "set_${field}", "${field}_set" ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_set"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field} = 1;
-            }
+                return $_[0]->{$field} if @_ == 1;
+                $_[0]->{$field} = $_[1] ? 1 : 0;   # normalize
+            },
+            purpose => <<'EODOC',
+If called without an argument, returns the boolean value (0 or 1). If called
+with an argument, it normalizes it to the boolean value. That is, the values
+0, undef and the empty string become 0; everything else becomes 1.
+EODOC
+            example => [
+                "\$obj->$field(\$value);",
+                "my \$value = \$obj->$field;",
+            ],
         );
 
 
-        $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field} = 0;
-            }
-        );
+        for my $name (uniq "set_${field}", "${field}_set") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field} = 1;
+                },
+                purpose => <<'EODOC',
+Sets the boolean value to 1.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
+
+
+        for my $name (uniq "clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field} = 0;
+                },
+                purpose => <<'EODOC',
+Clears the boolean value by setting it to 0.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -814,43 +1134,73 @@ sub mk_integer_accessors {
     my $class = ref $self || $self;
 
     for my $field (@fields) {
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            return $self->{$field} || 0 unless @_;
-            $self->{$field} = shift;
-        });
-
-
         $self->install_accessor(
-            name => [ "reset_${field}", "${field}_reset" ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_reset"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field} = 0;
-            }
+                my $self = shift;
+                return $self->{$field} || 0 unless @_;
+                $self->{$field} = shift;
+            },
+            purpose => <<'EODOC',
+A basic getter/setter method. If called without an argument, it returns the
+value, or 0 if there is no previous value. If called with a single argument,
+it sets the value.
+EODOC
+            example => [
+                "\$obj->$field(\$value);",
+                "my \$value = \$obj->$field;",
+            ],
         );
 
 
-        $self->install_accessor(
-            name => [ "inc_${field}", "${field}_inc" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_inc"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field}++;
-            }
-        );
+        for my $name (uniq "reset_${field}", "${field}_reset") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field} = 0;
+                },
+                purpose => <<'EODOC',
+Resets the value to 0.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "dec_${field}", "${field}_dec" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_dec"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field}--;
-            }
-        );
+        for my $name (uniq "inc_${field}", "${field}_inc") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field}++;
+                },
+                purpose => <<'EODOC',
+Increases the value by 1.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
+
+
+        for my $name (uniq "dec_${field}", "${field}_dec") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field}--;
+                },
+                purpose => <<'EODOC',
+Decreases the value by 1.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -866,96 +1216,153 @@ sub mk_set_accessors {
         my $elements_method = "${field}_elements";
 
 
-        $self->install_accessor(name => $field, code => sub {
-            local $DB::sub = local *__ANON__ = "${class}::${field}"
-                if defined &DB::DB && !$Devel::DProf::VERSION;
-            my $self = shift;
-            if (@_) {
-                $self->$insert_method(@_);
-            } else {
-                $self->$elements_method;
-            }
-        });
-
-
         $self->install_accessor(
-            name => [ "insert_${field}", $insert_method ],
+            name => $field,
             code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${insert_method}"
+                local $DB::sub = local *__ANON__ = "${class}::${field}"
                     if defined &DB::DB && !$Devel::DProf::VERSION;
                 my $self = shift;
-                $self->{$field}{$_}++ for flatten(@_);
-            }
+                if (@_) {
+                    $self->$insert_method(@_);
+                } else {
+                    $self->$elements_method;
+                }
+            },
+            purpose => <<'EODOC',
+A set is like an array except that each element can occur only one. It is,
+however, not ordered. If called with a list of arguments, it adds those
+elements to the set. If the first argument is an array reference, the values
+contained therein are added to the set. If called without arguments, it
+returns the elements of the set.
+EODOC
+            example => [
+                "my \@elements = \$obj->$field;",
+                "\$obj->$field(\@elements);",
+            ],
         );
 
 
-        $self->install_accessor(
-            name => [ "elements_${field}", $elements_method ],
-            code => sub {
-                local $DB::sub = local *__ANON__ =
-                    "${class}::${elements_method}"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                $self->{$field} ||= {};
-                keys %{ $self->{$field} }
-            }
-        );
+        for my $name (uniq "insert_${field}", $insert_method) {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    $self->{$field}{$_}++ for flatten(@_);
+                },
+                purpose => <<'EODOC',
+If called with a list of arguments, it adds those elements to the set. If the
+first argument is an array reference, the values contained therein are added
+to the set.
+EODOC
+                example => "\$obj->$name(\@elements);",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "delete_${field}", "${field}_delete" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_delete"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                delete $self->{$field}{$_} for @_;
-            }
-        );
+        for my $name (uniq "elements_${field}", $elements_method) {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    $self->{$field} ||= {};
+                    keys %{ $self->{$field} }
+                },
+                purpose => <<'EODOC',
+Returns the elements of the set.
+EODOC
+                example => "my \@elements = \$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "clear_${field}", "${field}_clear" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_clear"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                $_[0]->{$field} = {};
-            }
-        );
+        for my $name (uniq "delete_${field}", "${field}_delete") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    delete $self->{$field}{$_} for @_;
+                },
+                purpose => <<'EODOC',
+If called with a list of values, it deletes those elements from the set.
+EODOC
+                example => "\$obj->$name(\@elements);",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "contains_${field}", "${field}_contains" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_contains"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, $key) = @_;
-                return unless defined $key;
-                exists $self->{$field}{$key};
-            }
-        );
+        for my $name (uniq "clear_${field}", "${field}_clear") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    $_[0]->{$field} = {};
+                },
+                purpose => <<'EODOC',
+Deletes all elements from the set.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "is_empty_${field}", "${field}_is_empty" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_is_empty"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                keys %{ $self->{$field} || {} } == 0;
-            }
-        );
+        for my $name (uniq "contains_${field}", "${field}_contains") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, $key) = @_;
+                    return unless defined $key;
+                    exists $self->{$field}{$key};
+                },
+                purpose => <<'EODOC',
+Takes a single key and returns a boolean value indicating whether that key is
+an element of the set.
+EODOC
+                example => "if (\$obj->$name(\$element)) { ... }",
+            );
+        }
 
 
-        $self->install_accessor(
-            name => [ "size_${field}", "${field}_size" ],
-            code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}_size"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my $self = shift;
-                scalar keys %{ $self->{$field} || {} };
-            }
-        );
+        for my $name (uniq "is_empty_${field}", "${field}_is_empty") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    keys %{ $self->{$field} || {} } == 0;
+                },
+                purpose => <<'EODOC',
+Returns a boolean value indicating whether the set is empty of not.
+EODOC
+                example => "\$obj->$name;",
+            );
+        }
 
+
+        for my $name (uniq "size_${field}", "${field}_size") {
+            $self->install_accessor(
+                name => $name,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my $self = shift;
+                    scalar keys %{ $self->{$field} || {} };
+                },
+                purpose => <<'EODOC',
+Returns the number of elements in the set.
+EODOC
+                example => "my \$size = \$obj->$name;",
+            );
+        }
     }
 
     $self;  # for chaining
@@ -971,12 +1378,12 @@ sub mk_object_accessors {
         my $list = shift @args or die "No slot names for $class";
 
         # Allow a list of hashrefs.
-        my @list = ( ref($list) eq 'ARRAY' ) ? @$list : ($list);
+        my @list = ref($list) eq 'ARRAY' ? @$list : ($list);
 
         for my $obj_def (@list) {
 
             my ($name, @composites);
-            if ( ! ref $obj_def ) {
+            if (!ref $obj_def) {
                 $name = $obj_def;
             } else {
                 $name = $obj_def->{slot};
@@ -986,38 +1393,76 @@ sub mk_object_accessors {
             }
 
             for my $meth (@composites) {
-                $self->install_accessor(name => $meth, code => sub {
-                    local $DB::sub = local *__ANON__ = "${class}::{$meth}"
-                        if defined &DB::DB && !$Devel::DProf::VERSION;
-                    my ($self, @args) = @_;
-                    $self->$name()->$meth(@args);
-                });
+                $self->install_accessor(
+                    name => $meth,
+                    code => sub {
+                        local $DB::sub = local *__ANON__ = "${class}::{$meth}"
+                            if defined &DB::DB && !$Devel::DProf::VERSION;
+                        my ($self, @args) = @_;
+                        $self->$name()->$meth(@args);
+                    },
+                    purpose => <<EODOC,
+Calls $meth() with the given arguments on the object stored in the $name slot.
+If there is no such object, a new $type object is constructed - no arguments
+are passed to the constructor - and stored in the $name slot before forwarding
+$meth() onto it.
+EODOC
+                    example => [
+                        "\$obj->$meth(\@args);",
+                        "\$obj->$meth;",
+                    ],
+                );
             }
 
-            $self->install_accessor(name => $name, code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${name}"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, @args) = @_;
-                if (ref($args[0]) && UNIVERSAL::isa($args[0], $type)) {
-                    $self->{$name} = $args[0];
-                } else {
-                    defined $self->{$name} or
-                        $self->{$name} = $type->new(@args);
-                }
-                $self->{$name};
-            });
-
-
             $self->install_accessor(
-                name => [ "clear_${name}", "${name}_clear" ],
+                name => $name,
                 code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${name}_clear"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                delete $_[0]->{$name};
-            });
+                    local $DB::sub = local *__ANON__ = "${class}::${name}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, @args) = @_;
+                    if (ref($args[0]) && UNIVERSAL::isa($args[0], $type)) {
+                        $self->{$name} = $args[0];
+                    } else {
+                        defined $self->{$name} or
+                            $self->{$name} = $type->new(@args);
+                    }
+                    $self->{$name};
+                },
+                purpose => <<EODOC,
+If called with an argument object of type $type it sets the object; further
+arguments are discarded. If called with arguments but the first argument is
+not an object of type $type, a new object of type $type is constructed and the
+arguments are passed to the constructor.
+
+If called without arguments, it returns the $type object stored in this slot;
+if there is no such object, a new $type object is constructed - no arguments
+are passed to the constructor in this case - and stored in the $name slot
+before returning it.
+EODOC
+                example => [
+                    "my \$object = \$obj->$name;",
+                    "\$obj->$name(\$object);",
+                    "\$obj->$name(\@args);",
+                ],
+            );
+
+
+            for my $meth ("clear_${name}", "${name}_clear") {
+                $self->install_accessor(
+                    name => $meth,
+                    code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${meth}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    delete $_[0]->{$name};
+                    },
+                    purpose => <<'EODOC',
+Deletes the object.
+EODOC
+                    example => "\$obj->$meth;",
+                );
+            }
         }
     }
-
 
     $self;  # for chaining
 }
@@ -1030,12 +1475,23 @@ sub mk_forward_accessors {
     while (my ($slot, $methods) = each %args) {
         my @methods = ref $methods eq 'ARRAY' ? @$methods : ($methods);
         for my $field (@methods) {
-            $self->install_accessor(name => $field, code => sub {
-                local $DB::sub = local *__ANON__ = "${class}::${field}"
-                    if defined &DB::DB && !$Devel::DProf::VERSION;
-                my ($self, @args) = @_;
-                $self->$slot()->$field(@args);
-            });
+            $self->install_accessor(
+                name => $field,
+                code => sub {
+                    local $DB::sub = local *__ANON__ = "${class}::${field}"
+                        if defined &DB::DB && !$Devel::DProf::VERSION;
+                    my ($self, @args) = @_;
+                    $self->$slot()->$field(@args);
+                },
+                purpose => <<EODOC,
+Calls $field() with the given arguments on the object stored in the $slot
+slot. 
+EODOC
+                example => [
+                    "\$obj->$field(\@args);",
+                    "\$obj->$field;",
+                ],
+            );
         }
     }
 
@@ -1047,5 +1503,7 @@ sub mk_forward_accessors {
 
 __END__
 
-#line 1561
+{% USE p = PodGenerated %}
+
+#line 1990
 
