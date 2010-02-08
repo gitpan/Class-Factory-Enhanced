@@ -1,17 +1,11 @@
 package Class::Factory::Enhanced;
-
+use 5.006;
 use warnings;
 use strict;
-
-
-our $VERSION = '0.07';
-
-
+our $VERSION = '0.08';
 use base 'Class::Factory';
 
-
 # add support for defining several mappings at once
-
 sub add_factory_type {
     my ($item, @args) = @_;
     my $class = ref $item || $item;
@@ -21,7 +15,6 @@ sub add_factory_type {
     # but it is used in get_factory_class(). get_factory_class() only calls
     # this with one argument, so return the first object class we see. It's a
     # hack, yes...
-
     my $first_object_class;
     while (my ($object_type, $object_class) = splice @args, 0, 2) {
         $class->SUPER::remove_factory_type($object_type);
@@ -30,7 +23,6 @@ sub add_factory_type {
     }
     return $first_object_class;
 }
-
 
 sub register_factory_type {
     my ($item, @args) = @_;
@@ -41,24 +33,17 @@ sub register_factory_type {
     }
 }
 
-
 sub make_object_for_type {
     my ($self, $object_type, @args) = @_;
     my $class = $self->get_factory_class($object_type);
     $class->new(@args);
 }
-
-
 1;
-
-
 __END__
-
-
 
 =head1 NAME
 
-Class::Factory::Enhanced - more functionality for Class::Factory
+Class::Factory::Enhanced - More functionality for Class::Factory
 
 =head1 SYNOPSIS
 
@@ -81,17 +66,17 @@ This class overrides and adds the following methods.
 
 =over 4
 
-=item add_factory_type
+=item C<add_factory_type>
 
 Like C<Class::Factory>'s C<add_factory_type()>, but this one can add several
 mappings at once. See the Synopsis for an example.
 
-=item register_factory_type
+=item C<register_factory_type>
 
 Like C<Class::Factory>'s C<register_factory_type()>, but this one can add
 several mappings at once.
 
-=item make_object_for_type
+=item C<make_object_for_type>
 
     $factory->make_object_for_type('person_name',
         last_name  => 'Shindou',
@@ -106,21 +91,11 @@ to be passed to the constructor (C<new()>) of the newly constructed object.
 
 =back
 
-=head1 TAGS
-
-If you talk about this module in blogs, on del.icio.us or anywhere else,
-please use the C<classfactoryenhanced> tag.
-
-=head1 VERSION 
-                   
-This document describes version 0.07 of L<Class::Factory::Enhanced>.
-
 =head1 BUGS AND LIMITATIONS
 
 No bugs have been reported.
 
-Please report any bugs or feature requests to
-C<<bug-class-factory-enhanced@rt.cpan.org>>, or through the web interface at
+Please report any bugs or feature requests through the web interface at
 L<http://rt.cpan.org>.
 
 =head1 INSTALLATION
@@ -131,19 +106,17 @@ See perlmodinstall for information and options on installing Perl modules.
 
 The latest version of this module is available from the Comprehensive Perl
 Archive Network (CPAN). Visit <http://www.perl.com/CPAN/> to find a CPAN
-site near you. Or see <http://www.perl.com/CPAN/authors/id/M/MA/MARCEL/>.
+site near you. Or see L<http://search.cpan.org/dist/Class-Factory-Enhanced/>.
 
-=head1 AUTHOR
+=head1 AUTHORS
 
 Marcel GrE<uuml>nauer, C<< <marcel@cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2007-2008 by Marcel GrE<uuml>nauer
+Copyright 2007-2009 by the authors.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
-
 =cut
-

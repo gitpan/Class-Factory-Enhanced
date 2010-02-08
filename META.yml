@@ -1,25 +1,31 @@
---- 
-abstract: more functionality for Class::Factory
-author: 
-  - "{% ELSE %}"
-build_requires: 
-  Class::Accessor::Complex: 0
-  Test::Compile: 0
-  Test::More: 0
-  UNIVERSAL::require: 0
+---
+abstract: 'More functionality for Class::Factory'
+author:
+  - 'Marcel GrE<uuml>nauer, C<< <marcel@cpan.org> >>'
+build_requires:
+  ExtUtils::MakeMaker: 6.42
+  Test::More: 0.70
+configure_requires:
+  ExtUtils::MakeMaker: 6.42
 distribution_type: module
-generated_by: Module::Install version 0.68
+generated_by: 'Module::Install version 0.91'
 license: perl
-meta-spec: 
-  url: http://module-build.sourceforge.net/META-spec-v1.3.html
-  version: 1.3
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
 name: Class-Factory-Enhanced
-no_index: 
-  directory: 
+no_index:
+  directory:
     - inc
     - t
-requires: 
+    - xt
+requires:
   Class::Accessor::Installer: 0
   Class::Factory: 1.06
   perl: 5.6.0
-version: 0.07
+resources:
+  bugtracker: http://rt.cpan.org/Public/Dist/Display.html?Name=Class-Factory-Enhanced
+  homepage: http://search.cpan.org/dist/Class-Factory-Enhanced/
+  license: http://dev.perl.org/licenses/
+  repository: git://github.com/hanekomu/class-factory-enhanced.git
+version: 0.08

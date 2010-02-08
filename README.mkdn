@@ -1,0 +1,73 @@
+# NAME
+
+Class::Factory::Enhanced - More functionality for Class::Factory
+
+# SYNOPSIS
+
+    package My::Factory;
+    use base 'Class::Factory::Enhanced';
+
+    package Some::Class;
+    My::Factory->add_factory_type(
+        person_name    => 'Person::Name',
+        person_address => 'Person::Address'
+    );
+
+# DESCRIPTION
+
+This class subclasses [Class::Factory](http://search.cpan.org/perldoc?Class::Factory) and adds some functionality.
+
+# METHODS
+
+This class overrides and adds the following methods.
+
+- `add_factory_type`
+
+Like `Class::Factory`'s `add_factory_type()`, but this one can add several
+mappings at once. See the Synopsis for an example.
+
+- `register_factory_type`
+
+Like `Class::Factory`'s `register_factory_type()`, but this one can add
+several mappings at once.
+
+- `make_object_for_type`
+
+    $factory->make_object_for_type('person_name',
+        last_name  => 'Shindou',
+        first_name => 'Hikaru',
+    );
+
+An alternative constructor that gets the class to be constructed from the
+factory, then calls `new()` on that class.
+
+Takes as arguments the object type to be constructed and a list of arguments
+to be passed to the constructor (`new()`) of the newly constructed object.
+
+# BUGS AND LIMITATIONS
+
+No bugs have been reported.
+
+Please report any bugs or feature requests through the web interface at
+<http://rt.cpan.org>.
+
+# INSTALLATION
+
+See perlmodinstall for information and options on installing Perl modules.
+
+# AVAILABILITY
+
+The latest version of this module is available from the Comprehensive Perl
+Archive Network (CPAN). Visit <http://www.perl.com/CPAN/> to find a CPAN
+site near you. Or see <http://search.cpan.org/dist/Class-Factory-Enhanced/>.
+
+# AUTHORS
+
+Marcel Gr&uuml;nauer, `<marcel@cpan.org>`
+
+# COPYRIGHT AND LICENSE
+
+Copyright 2007-2009 by the authors.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
