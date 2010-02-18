@@ -1,6 +1,25 @@
 package Person::ComplexAddress;
 use warnings;
 use strict;
-use base 'Class::Accessor::Complex';
-__PACKAGE__->mk_new->mk_scalar_accessors(qw(street city postalcode country));
+use base 'Person::Base';
+
+sub street {
+    return $_[0]->{street} if @_ == 1;
+    $_[0]->{street} = $_[1];
+}
+
+sub city {
+    return $_[0]->{city} if @_ == 1;
+    $_[0]->{city} = $_[1];
+}
+
+sub postalcode {
+    return $_[0]->{postalcode} if @_ == 1;
+    $_[0]->{postalcode} = $_[1];
+}
+
+sub country {
+    return $_[0]->{country} if @_ == 1;
+    $_[0]->{country} = $_[1];
+}
 1;

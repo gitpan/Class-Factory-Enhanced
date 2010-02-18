@@ -1,6 +1,10 @@
 package Person::SimpleName;
 use warnings;
 use strict;
-use base 'Class::Accessor::Complex';
-__PACKAGE__->mk_new->mk_scalar_accessors(qw(fullname));
+use base 'Person::Base';
+
+sub fullname {
+    return $_[0]->{fullname} if @_ == 1;
+    $_[0]->{fullname} = $_[1];
+}
 1;

@@ -2,7 +2,7 @@ package Class::Factory::Enhanced;
 use 5.006;
 use warnings;
 use strict;
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 use base 'Class::Factory';
 
 # add support for defining several mappings at once

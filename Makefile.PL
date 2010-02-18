@@ -22,6 +22,7 @@ author_requires 'Test::Pod';
 author_requires 'Test::Spelling';
 author_requires 'Pod::Wordlist::hanekomu';
 author_requires 'Test::Pod::Coverage';
+
 # author_requires 'Test::Kwalitee';
 author_requires 'Test::YAML::Meta';
 author_requires 'Test::Portability::Files';
@@ -30,7 +31,6 @@ author_requires 'Test::MinimumVersion';
 author_requires 'Test::HasVersion';
 author_requires 'Test::CheckChanges';
 author_requires 'Test::DistManifest';
-
 auto_install;
 auto_include;
 WriteAll;

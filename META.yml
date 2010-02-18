@@ -28,4 +28,4 @@ resources:
   homepage: http://search.cpan.org/dist/Class-Factory-Enhanced/
   license: http://dev.perl.org/licenses/
   repository: git://github.com/hanekomu/class-factory-enhanced.git
-version: 0.08
+version: 0.09

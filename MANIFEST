@@ -30,6 +30,7 @@ README.mkdn
 t/00_versions.t
 t/01_override_register.t
 t/lib/MyFactory.pm
+t/lib/Person/Base.pm
 t/lib/Person/ComplexAddress.pm
 t/lib/Person/ComplexName.pm
 t/lib/Person/SimpleAddress.pm
