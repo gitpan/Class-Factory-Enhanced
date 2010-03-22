@@ -1,8 +1,11 @@
-package Class::Factory::Enhanced;
 use 5.006;
 use warnings;
 use strict;
-our $VERSION = '0.09';
+
+package Class::Factory::Enhanced;
+our $VERSION = '1.100810';
+# ABSTRACT: More functionality for Class::Factory
+
 use base 'Class::Factory';
 
 # add support for defining several mappings at once
@@ -39,11 +42,18 @@ sub make_object_for_type {
     $class->new(@args);
 }
 1;
+
+
 __END__
+=pod
 
 =head1 NAME
 
 Class::Factory::Enhanced - More functionality for Class::Factory
+
+=head1 VERSION
+
+version 1.100810
 
 =head1 SYNOPSIS
 
@@ -62,21 +72,17 @@ This class subclasses L<Class::Factory> and adds some functionality.
 
 =head1 METHODS
 
-This class overrides and adds the following methods.
-
-=over 4
-
-=item C<add_factory_type>
+=head2 add_factory_type
 
 Like C<Class::Factory>'s C<add_factory_type()>, but this one can add several
 mappings at once. See the Synopsis for an example.
 
-=item C<register_factory_type>
+=head2 register_factory_type
 
 Like C<Class::Factory>'s C<register_factory_type()>, but this one can add
 several mappings at once.
 
-=item C<make_object_for_type>
+=head2 make_object_for_type
 
     $factory->make_object_for_type('person_name',
         last_name  => 'Shindou',
@@ -89,34 +95,39 @@ factory, then calls C<new()> on that class.
 Takes as arguments the object type to be constructed and a list of arguments
 to be passed to the constructor (C<new()>) of the newly constructed object.
 
-=back
+=head1 INSTALLATION
+
+See perlmodinstall for information and options on installing Perl modules.
 
 =head1 BUGS AND LIMITATIONS
 
 No bugs have been reported.
 
 Please report any bugs or feature requests through the web interface at
-L<http://rt.cpan.org>.
-
-=head1 INSTALLATION
-
-See perlmodinstall for information and options on installing Perl modules.
+L<http://rt.cpan.org/Public/Dist/Display.html?Name=Class-Factory-Enhanced>.
 
 =head1 AVAILABILITY
 
 The latest version of this module is available from the Comprehensive Perl
-Archive Network (CPAN). Visit <http://www.perl.com/CPAN/> to find a CPAN
-site near you. Or see L<http://search.cpan.org/dist/Class-Factory-Enhanced/>.
+Archive Network (CPAN). Visit L<http://www.perl.com/CPAN/> to find a CPAN
+site near you, or see
+L<http://search.cpan.org/dist/Class-Factory-Enhanced/>.
 
-=head1 AUTHORS
+The development version lives at
+L<http://github.com/hanekomu/Class-Factory-Enhanced/>.
+Instead of sending patches, please fork this project using the standard git
+and github infrastructure.
 
-Marcel GrE<uuml>nauer, C<< <marcel@cpan.org> >>
+=head1 AUTHOR
+
+  Marcel Gruenauer <marcel@cpan.org>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2007-2009 by the authors.
+This software is copyright (c) 2007 by Marcel Gruenauer.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
 
 =cut
+

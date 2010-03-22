@@ -1,4 +1,5 @@
 package Person::ComplexAddress;
+our $VERSION = '1.100810';
 use warnings;
 use strict;
 use base 'Person::Base';

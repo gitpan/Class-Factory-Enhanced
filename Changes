@@ -1,5 +1,8 @@
 Revision history for Perl extension Class-Factory-Enhanced
 
+1.100810  2010-03-22 22:42:55 Europe/Vienna
+    - converted distribution to Dist::Zilla-style
+
 0.09  Thu 2010.02.18 21:42:11 CET (Marcel Gruenauer <marcel@cpan.org>)
      - tests no longer require Class::Accessor::Complex
 

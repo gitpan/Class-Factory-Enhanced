@@ -1,9 +1,10 @@
-This is the Perl module Class::Factory::Enhanced.
+
+This is the Perl distribution Class-Factory-Enhanced.
 
 ## Installation
 
-Class::Factory::Enhanced installation is straightforward. If your CPAN shell is
-set up, you should just be able to do
+Class-Factory-Enhanced installation is straightforward.
+If your CPAN shell is set up, you should just be able to do
 
     % cpan Class::Factory::Enhanced
 
@@ -18,10 +19,9 @@ Then install it:
 
 ## Documentation
 
-Class::Factory::Enhanced documentation is available as in POD. So you can do:
+Class-Factory-Enhanced documentation is available as in POD.
+So you can do:
 
     % perldoc Class::Factory::Enhanced
 
-to read the documentation online with your favorite pager.
-
-Marcel Gruenauer
+to read the documentation with your favorite pager.
