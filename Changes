@@ -1,5 +1,8 @@
 Revision history for Perl extension Class-Factory-Enhanced
 
+1.101420  2010-05-22 22:56:10 Europe/Vienna
+    - 'use parent' instead of 'use base'
+
 1.100810  2010-03-22 22:42:55 Europe/Vienna
     - converted distribution to Dist::Zilla-style
 

@@ -2,7 +2,7 @@ NAME
     Class::Factory::Enhanced - More functionality for Class::Factory
 
 VERSION
-    version 1.100810
+    version 1.101420
 
 SYNOPSIS
         package My::Factory;

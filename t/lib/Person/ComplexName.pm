@@ -1,8 +1,7 @@
 package Person::ComplexName;
-our $VERSION = '1.100810';
 use warnings;
 use strict;
-use base 'Person::Base';
+use parent 'Person::Base';
 
 sub firstname {
     return $_[0]->{firstname} if @_ == 1;

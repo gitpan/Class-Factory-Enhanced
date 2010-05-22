@@ -3,10 +3,12 @@ use warnings;
 use strict;
 
 package Class::Factory::Enhanced;
-our $VERSION = '1.100810';
+BEGIN {
+  $Class::Factory::Enhanced::VERSION = '1.101420';
+}
 # ABSTRACT: More functionality for Class::Factory
 
-use base 'Class::Factory';
+use parent 'Class::Factory';
 
 # add support for defining several mappings at once
 sub add_factory_type {
@@ -53,7 +55,7 @@ Class::Factory::Enhanced - More functionality for Class::Factory
 
 =head1 VERSION
 
-version 1.100810
+version 1.101420
 
 =head1 SYNOPSIS
 
